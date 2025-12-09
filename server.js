@@ -4,7 +4,9 @@ const dotenv = require("dotenv");
 const cors = require("cors");
 const authRoutes = require("./routs/auth");
 
-dotenv.config();
+if (process.env.NODE_ENV !== "production") {
+  dotenv.config();
+}
 
 const app = express();
 app.use(cors());
