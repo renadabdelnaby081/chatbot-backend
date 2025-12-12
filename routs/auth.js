@@ -1,6 +1,6 @@
 const express = require("express");
 const router = express.Router();
-const User = require("../model/User");
+const User = require("../models/User"); // ← هنا التعديل الصحيح
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
 
@@ -33,36 +33,29 @@ router.post("/register", async (req, res) => {
   try {
     const { username, email, password } = req.body;
 
-    // هل الإيميل موجود قبل كده؟
     const existing = await User.findOne({ email });
     if (existing)
       return res.status(400).json({ message: "Email already registered" });
 
-    // تشفير الباسورد
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    // إنشاء مستخدم جديد
     const user = new User({
       username,
       email,
       password: hashedPassword,
     });
 
-    // كود التفعيل
     const verificationCode = Math.floor(
       100000 + Math.random() * 900000
     ).toString();
 
-    // تشفير الكود
     const hashedCode = await bcrypt.hash(verificationCode, 10);
 
-    // حفظه في الداتابيز
     user.verificationCode = hashedCode;
     user.verificationCodeExpires = Date.now() + 10 * 60 * 1000; // 10 دقائق
 
     await user.save();
 
-    // إرسال الكود الحقيقي للمستخدم
     await sendEmail(
       user.email,
       "Your Verification Code",
@@ -87,20 +80,17 @@ router.post("/verify", async (req, res) => {
     if (!user)
       return res.status(400).json({ message: "User not found" });
 
-    // هل الكود انتهى؟
     if (Date.now() > user.verificationCodeExpires) {
       return res
         .status(400)
         .json({ message: "Verification code expired. Request a new one." });
     }
 
-    // مقارنة الكود اللي دخله المستخدم مع المشفّر
     const isMatch = await bcrypt.compare(code, user.verificationCode);
 
     if (!isMatch)
       return res.status(400).json({ message: "Incorrect verification code" });
 
-    // تفعيل الحساب
     user.isVerified = true;
     user.verificationCode = undefined;
     user.verificationCodeExpires = undefined;
