@@ -1,18 +1,41 @@
 const express = require("express");
 const mongoose = require("mongoose");
-const dotenv = require("dotenv");
 const cors = require("cors");
 const authRoutes = require("./routs/auth");
-
-if (process.env.NODE_ENV !== "production") {
-  dotenv.config();
-}
+const rateLimit = require("express-rate-limit");
 
 const app = express();
 app.use(cors());
 app.use(express.json());
 
+// ------------------- Rate Limiting -------------------
+
+// منع سبّام التسجيل
+const registerLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 5,
+  message: {
+    status: "error",
+    message: "Too many registration attempts, please try again later."
+  }
+});
+
+// منع سبّام تسجيل الدخول
+const loginLimiter = rateLimit({
+  windowMs: 60 * 1000, 
+  max: 10,
+  message: {
+    status: "error",
+    message: "Too many login attempts, slow down."
+  }
+});
+
+app.use("/api/auth/register", registerLimiter);
+app.use("/api/auth/login", loginLimiter);
+
 app.use("/api/auth", authRoutes);
+
+// ------------------- MongoDB Connection -------------------
 
 mongoose
   .connect(process.env.MONGO_URI)

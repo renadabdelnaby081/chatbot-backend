@@ -1,15 +1,12 @@
 const express = require("express");
+const router = express.Router();
+const User = require("../models/User");
 const bcrypt = require("bcrypt");
-const User = require("../model/User");
+const jwt = require("jsonwebtoken");
+
+// إرسال إيميل
 const nodemailer = require("nodemailer");
 
-const router = express.Router();
-
-// Password validation
-const passwordRegex =
-  /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*()_+\-={}[\]|:;"'<>,.?/]).{8,}$/;
-
-// Email sender
 const transporter = nodemailer.createTransport({
   service: "gmail",
   auth: {
@@ -18,122 +15,136 @@ const transporter = nodemailer.createTransport({
   },
 });
 
-// ---------------------- SIGNUP ----------------------
-router.post("/signup", async (req, res) => {
+// إرسال ايميل
+function sendEmail(to, subject, text) {
+  return transporter.sendMail({
+    from: process.env.GMAIL_USER,
+    to,
+    subject,
+    text,
+  });
+}
+
+//////////////////////////////////////////////////////
+// REGISTER
+//////////////////////////////////////////////////////
+
+router.post("/register", async (req, res) => {
   try {
-    const { fullName, email, password, dateOfBirth } = req.body;
+    const { username, email, password } = req.body;
 
-    if (!fullName || !email || !password || !dateOfBirth)
-      return res.status(400).json({ message: "All fields are required" });
+    // هل الإيميل موجود قبل كده؟
+    const existing = await User.findOne({ email });
+    if (existing)
+      return res.status(400).json({ message: "Email already registered" });
 
-    if (!passwordRegex.test(password))
-      return res.status(400).json({
-        message:
-          "Password must include 1 uppercase, 1 lowercase, 1 number, 1 symbol, 8+ characters",
-      });
-
-    const existingUser = await User.findOne({ email });
-    if (existingUser)
-      return res.status(400).json({ message: "Email already in use" });
-
+    // تشفير الباسورد
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    const newUser = new User({
-      fullName,
+    // إنشاء مستخدم جديد
+    const user = new User({
+      username,
       email,
       password: hashedPassword,
-      dateOfBirth,
     });
 
-    await newUser.save();
-    res.status(201).json({ message: "User registered successfully" });
+    // كود التفعيل
+    const verificationCode = Math.floor(
+      100000 + Math.random() * 900000
+    ).toString();
+
+    // تشفير الكود
+    const hashedCode = await bcrypt.hash(verificationCode, 10);
+
+    // حفظه في الداتابيز
+    user.verificationCode = hashedCode;
+    user.verificationCodeExpires = Date.now() + 10 * 60 * 1000; // 10 دقائق
+
+    await user.save();
+
+    // إرسال الكود الحقيقي للمستخدم
+    await sendEmail(
+      user.email,
+      "Your Verification Code",
+      `Your verification code is: ${verificationCode}`
+    );
+
+    res.json({ message: "User registered. Check your email for verification." });
   } catch (err) {
-    res.status(500).json({ message: "Server error" });
+    res.status(500).json({ message: "Error in register", error: err.message });
   }
 });
 
-// ---------------------- LOGIN ----------------------
+//////////////////////////////////////////////////////
+// VERIFY EMAIL
+//////////////////////////////////////////////////////
+
+router.post("/verify", async (req, res) => {
+  try {
+    const { email, code } = req.body;
+
+    const user = await User.findOne({ email });
+    if (!user)
+      return res.status(400).json({ message: "User not found" });
+
+    // هل الكود انتهى؟
+    if (Date.now() > user.verificationCodeExpires) {
+      return res
+        .status(400)
+        .json({ message: "Verification code expired. Request a new one." });
+    }
+
+    // مقارنة الكود اللي دخله المستخدم مع المشفّر
+    const isMatch = await bcrypt.compare(code, user.verificationCode);
+
+    if (!isMatch)
+      return res.status(400).json({ message: "Incorrect verification code" });
+
+    // تفعيل الحساب
+    user.isVerified = true;
+    user.verificationCode = undefined;
+    user.verificationCodeExpires = undefined;
+    await user.save();
+
+    res.json({ message: "Email verified successfully" });
+  } catch (err) {
+    res.status(500).json({ message: "Verification error", error: err.message });
+  }
+});
+
+//////////////////////////////////////////////////////
+// LOGIN
+//////////////////////////////////////////////////////
+
 router.post("/login", async (req, res) => {
   try {
     const { email, password } = req.body;
 
     const user = await User.findOne({ email });
     if (!user)
-      return res.status(400).json({ message: "Incorrect email or password" });
+      return res.status(400).json({ message: "Invalid email or password" });
 
-    const match = await bcrypt.compare(password, user.password);
-    if (!match)
-      return res.status(400).json({ message: "Incorrect email or password" });
+    if (!user.isVerified)
+      return res.status(400).json({ message: "Email not verified" });
+
+    const isMatch = await bcrypt.compare(password, user.password);
+    if (!isMatch)
+      return res.status(400).json({ message: "Invalid email or password" });
+
+    const token = jwt.sign(
+      { id: user._id },
+      process.env.JWT_SECRET || "secretkey",
+      { expiresIn: "7d" }
+    );
 
     res.json({
       message: "Login successful",
-      user: {
-        id: user._id,
-        fullName: user.fullName,
-        email: user.email,
-      },
+      token,
+      user: { username: user.username, email: user.email },
     });
   } catch (err) {
-    res.status(500).json({ message: "Server error" });
+    res.status(500).json({ message: "Login error", error: err.message });
   }
-});
-
-// ---------------------- FORGOT PASSWORD ----------------------
-router.post("/forgot-password", async (req, res) => {
-  const { email } = req.body;
-
-  const user = await User.findOne({ email });
-  if (!user)
-    return res.status(400).json({ message: "No account with this email" });
-
-  const resetCode = Math.floor(100000 + Math.random() * 900000).toString();
-
-  user.resetCode = resetCode;
-  user.resetCodeExpiration = Date.now() + 10 * 60 * 1000;
-  await user.save();
-
-  await transporter.sendMail({
-    from: process.env.GMAIL_USER,
-    to: email,
-    subject: "Password Reset Code",
-    text: `Your reset code is: ${resetCode}`,
-  });
-
-  res.json({ message: "Reset code sent" });
-});
-
-// ---------------------- VERIFY CODE ----------------------
-router.post("/verify-code", async (req, res) => {
-  const { email, code } = req.body;
-
-  const user = await User.findOne({ email });
-  if (!user) return res.status(400).json({ message: "User not found" });
-
-  if (user.resetCode !== code)
-    return res.status(400).json({ message: "Wrong code" });
-
-  if (user.resetCodeExpiration < Date.now())
-    return res.status(400).json({ message: "Code expired" });
-
-  res.json({ message: "Code verified" });
-});
-
-// ---------------------- RESET PASSWORD ----------------------
-router.post("/reset-password", async (req, res) => {
-  const { email, newPassword } = req.body;
-
-  const hashed = await bcrypt.hash(newPassword, 10);
-
-  await User.updateOne(
-    { email },
-    {
-      password: hashed,
-      resetCode: null,
-      resetCodeExpiration: null,
-    }
-  );
-
-  res.json({ message: "Password reset successful" });
 });
 
 module.exports = router;
