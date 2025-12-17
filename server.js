@@ -48,8 +48,10 @@ mongoose
   .then(() => {
     console.log("MongoDB connected");
 
-    const PORT = process.env.PORT || 5000;
-    app.listen(PORT, () => {
+    // ⚠️ تعديل مهم لـ Railway
+    const PORT = process.env.PORT;
+
+    app.listen(PORT, "0.0.0.0", () => {
       console.log(`Server running on port ${PORT}`);
     });
   })
