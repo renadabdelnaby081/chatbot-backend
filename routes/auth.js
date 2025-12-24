@@ -1,3 +1,22 @@
+const express = require("express");
+const router = express.Router();
+const bcrypt = require("bcryptjs");
+const User = require("../models/User");
+const nodemailer = require("nodemailer");
+
+//////////////////////////////////////////////////////
+// TEMP SEND EMAIL (inside same file)
+//////////////////////////////////////////////////////
+const sendEmail = async (to, subject, text) => {
+  console.log("📧 Sending email (mock):");
+  console.log("To:", to);
+  console.log("Subject:", subject);
+  console.log("Text:", text);
+
+  // لاحقًا ممكن نربطه بـ nodemailer الحقيقي
+  return true;
+};
+
 //////////////////////////////////////////////////////
 // REGISTER
 //////////////////////////////////////////////////////
@@ -23,10 +42,11 @@ router.post("/register", async (req, res) => {
     const username = email.split("@")[0];
 
     const user = new User({
-      username,               // كان undefined قبل كده
+      fullName,
+      username,
       email,
       password: hashedPassword,
-      dateOfBirth,            // محفوظة دلوقتي
+      dateOfBirth,
       isVerified: false,
     });
 
@@ -52,10 +72,12 @@ router.post("/register", async (req, res) => {
       message: "User registered. Check your email for verification.",
     });
   } catch (err) {
-    console.error(err);
+    console.error("🔥 Register error:", err);
     res.status(500).json({
       message: "Error in register",
       error: err.message,
     });
   }
 });
+
+module.exports = router;
