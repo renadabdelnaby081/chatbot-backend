@@ -10,8 +10,8 @@ dotenv.config();
 const app = express();
 
 // ------------------- Trust Proxy -------------------
-// مهم جدًا علشان Railway أو أي Proxy
-app.set("trust proxy", 1);
+// لازم true على Railway
+app.set("trust proxy", true);
 
 // ------------------- Middlewares -------------------
 app.use(cors());
