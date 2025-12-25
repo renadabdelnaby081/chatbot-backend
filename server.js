@@ -9,10 +9,6 @@ dotenv.config();
 
 const app = express();
 
-// ------------------- Trust Proxy -------------------
-// لازم true على Railway
-app.set("trust proxy", true);
-
 // ------------------- Middlewares -------------------
 app.use(cors());
 app.use(express.json());
@@ -22,6 +18,7 @@ app.use(express.json());
 const registerLimiter = rateLimit({
   windowMs: 60 * 1000,
   max: 5,
+  validate: { xForwardedForHeader: false }, // 👈 الحل القاطع
   standardHeaders: true,
   legacyHeaders: false,
   message: {
@@ -33,6 +30,7 @@ const registerLimiter = rateLimit({
 const loginLimiter = rateLimit({
   windowMs: 60 * 1000,
   max: 10,
+  validate: { xForwardedForHeader: false }, // 👈 الحل القاطع
   standardHeaders: true,
   legacyHeaders: false,
   message: {
