@@ -10,8 +10,8 @@ dotenv.config();
 const app = express();
 
 // ------------------- Trust Proxy -------------------
-// مهم لو السيرفر ورا Proxy زي Railway
-app.set('trust proxy', 1);
+// مهم جدًا علشان Railway أو أي Proxy
+app.set("trust proxy", 1);
 
 // ------------------- Middlewares -------------------
 app.use(cors());
@@ -19,20 +19,22 @@ app.use(express.json());
 
 // ------------------- Rate Limiting -------------------
 
-// منع سبام التسجيل
 const registerLimiter = rateLimit({
-  windowMs: 60 * 1000, // 1 دقيقة
+  windowMs: 60 * 1000,
   max: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
   message: {
     status: "error",
     message: "Too many registration attempts, please try again later."
   }
 });
 
-// منع سبام تسجيل الدخول
 const loginLimiter = rateLimit({
   windowMs: 60 * 1000,
   max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
   message: {
     status: "error",
     message: "Too many login attempts, slow down."
@@ -46,7 +48,6 @@ app.use("/api/auth/login", loginLimiter);
 app.use("/api/auth", authRoutes);
 
 // ------------------- MongoDB Connection -------------------
-
 mongoose
   .connect(process.env.MONGO_URI)
   .then(() => {
