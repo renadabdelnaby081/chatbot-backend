@@ -9,29 +9,30 @@ dotenv.config();
 
 const app = express();
 
-app.set("trust proxy", true);
+// ✅ مهم مع Render / Proxy
+app.set("trust proxy", 1);
 
 app.use(cors());
 app.use(express.json());
 
+// ✅ Rate limit للتسجيل
 const registerLimiter = rateLimit({
   windowMs: 60 * 1000,
   max: 5,
   standardHeaders: true,
   legacyHeaders: false,
-  keyGenerator: (req) => req.ip || req.connection.remoteAddress,
   message: {
     status: "error",
     message: "Too many registration attempts, please try again later."
   }
 });
 
+// ✅ Rate limit لتسجيل الدخول
 const loginLimiter = rateLimit({
   windowMs: 60 * 1000,
   max: 10,
   standardHeaders: true,
   legacyHeaders: false,
-  keyGenerator: (req) => req.ip || req.connection.remoteAddress,
   message: {
     status: "error",
     message: "Too many login attempts, slow down."
@@ -53,4 +54,6 @@ mongoose
       console.log(`Server running on port ${PORT}`);
     });
   })
-  .catch((err) => console.error("MongoDB connection error:", err));
+  .catch((err) => {
+    console.error("MongoDB connection error:", err);
+  });
